@@ -2,21 +2,36 @@
   <div id="signup">
     <div class="signup-form">
       <form @submit.prevent="onSubmit">
-        <div class="input">
+        <div class="input" :class="{invalid : $v.email.$error}">
           <label for="email">Mail</label>
-          <input type="email" id="email" v-model="email" />
+          <input type="email" id="email" v-model="email" @blur="$v.email.$touch()" />
+          <p v-if="!$v.email.email">Please provide a valid email address.</p>
+          <p v-if="!$v.email.required">This field must not be empty.</p>
         </div>
-        <div class="input">
+        <div class="input" :class="{invalid : $v.age.$error}">
           <label for="age">Your Age</label>
-          <input type="number" id="age" v-model.number="age" />
+          <input type="number" id="age" @blur="$v.age.$touch()" v-model.number="age" />
+          <p v-if="!$v.age.minVal">You must be at least {{ $v.age.$params.minVal.min }} years old.</p>
+          <p v-if="!$v.age.required">This field must not be empty.</p>
         </div>
-        <div class="input">
+        <div class="input" :class="{invalid: $v.password.$error}">
           <label for="password">Password</label>
-          <input type="password" id="password" v-model="password" />
+          <input type="password" id="password" @blur="$v.password.$touch()" v-model="password" />
+          <p v-if="!$v.password.required">This field must not be empty.</p>
+          <p
+            v-if="!$v.password.minLen"
+          >This field must not at least {{ $v.password.$params.minLen.min }} characters.</p>
         </div>
-        <div class="input">
+        <div class="input" :class="{invalid: $v.confirmPassword.$error}">
           <label for="confirm-password">Confirm Password</label>
-          <input type="password" id="confirm-password" v-model="confirmPassword" />
+          <input
+            type="password"
+            id="confirm-password"
+            v-model="confirmPassword"
+            @blur="$v.confirmPassword.$touch()"
+          />
+          <p v-if="!$v.confirmPassword.required">This field must not be empty.</p>
+          <p v-if="!$v.confirmPassword.sameAs">Password doesn't match.</p>
         </div>
         <div class="input">
           <label for="country">Country</label>
@@ -31,19 +46,33 @@
           <h3>Add some Hobbies</h3>
           <button @click="onAddHobby" type="button">Add Hobby</button>
           <div class="hobby-list">
-            <div class="input" v-for="(hobbyInput, index) in hobbyInputs" :key="hobbyInput.id">
+            <div
+              class="input"
+              v-for="(hobbyInput, index) in hobbyInputs"
+              :key="hobbyInput.id"
+              :class="{invalid: $v.hobbyInputs.$each[index].$error}"
+            >
               <label :for="hobbyInput.id">Hobby #{{ index+1 }}</label>
-              <input type="text" :id="hobbyInput.id" v-model="hobbyInput.value" />
+              <input
+                type="text"
+                :id="hobbyInput.id"
+                v-model="hobbyInput.value"
+                @blur="$v.hobbyInputs.$each[index].value.$touch()"
+              />
               <button @click="onDeleteHobby(hobbyInput.id)" type="button">X</button>
             </div>
+            <p
+              v-if="!$v.hobbyInputs.minLen"
+            >Please add at least {{ $v.hobbyInputs.$params.minLen.min }}</p>
+            <p v-if="!$v.hobbyInputs.required">Please add you hobbies</p>
           </div>
         </div>
-        <div class="input inline">
-          <input type="checkbox" id="terms" v-model="terms" />
+        <div class="input inline" :class="{invalid: $v.terms.$invalid}">
+          <input type="checkbox" id="terms" v-model="terms" @change="$v.terms.$touch()" />
           <label for="terms">Accept Terms of Use</label>
         </div>
         <div class="submit">
-          <button type="submit">Submit</button>
+          <button type="submit" :disabled="$v.$invalid">Submit</button>
         </div>
       </form>
     </div>
@@ -51,7 +80,15 @@
 </template>
 
 <script>
-import axios from "../../axios-auth";
+import {
+  required,
+  email,
+  numeric,
+  minValue,
+  minLength,
+  sameAs
+} from "vuelidate/lib/validators";
+import axios from "axios";
 export default {
   data() {
     return {
@@ -63,6 +100,46 @@ export default {
       hobbyInputs: [],
       terms: false
     };
+  },
+  validations: {
+    email: {
+      required,
+      email,
+      unique: val => {
+        if (val === "") return true;
+        return axios
+          .get('/users.json?orderBy="email"&equalTo="' + val + '"')
+          .then(res => {
+            return Object.keys(res.data).length === 0;
+          });
+      }
+    },
+    age: {
+      required,
+      numeric,
+      minVal: minValue(18)
+    },
+    password: {
+      required,
+      minLen: minLength(6)
+    },
+    confirmPassword: {
+      required,
+      sameAs: sameAs("password")
+    },
+    terms: {
+      checked: (value, vm) => vm.country === "germany" || value
+    },
+    hobbyInputs: {
+      required,
+      minLen: minLength(2),
+      $each: {
+        value: {
+          required,
+          minLen: minLength(5)
+        }
+      }
+    }
   },
   methods: {
     onAddHobby() {
@@ -131,6 +208,15 @@ export default {
   outline: none;
   border: 1px solid #521751;
   background-color: #eee;
+}
+
+.input.invalid label {
+  color: red;
+}
+
+.input.invalid input {
+  border: 1px solid red;
+  background-color: #ffc9aa;
 }
 
 .input select {
